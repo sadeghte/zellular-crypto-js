@@ -1,0 +1,15 @@
+node_modules
+build
+
+# Virtual environment directories
+**/venv/
+**/env/
+**/.venv/
+**/.env/
+
+# Ignore logs
+**/*.log
+**/*.so
+
+solana-perf-libs/
+solana-perf-libs/**/*.*
