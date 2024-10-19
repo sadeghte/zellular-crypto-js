@@ -1,14 +1,15 @@
 {
   "name": "zellular-crypto",
   "version": "1.0.0",
-  "main": "test-1.js",
+  "main": "./cuda-crypt/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "install": "make install"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
+  "gypfile": true,
   "devDependencies": {
     "node-addon-api": "^8.2.1",
     "node-gyp": "^10.2.0"

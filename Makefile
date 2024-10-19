@@ -3,7 +3,9 @@ BUILD_DIR=solana-perf-libs
 MODULE_DIR=cuda-crypt
 ABSOLUTE_MODULE_DIR=$(shell realpath $(MODULE_DIR))
 
-.PHONY: all clone build build-addon clean
+.PHONY: install all clone build build-addon clean
+
+install: all
 
 all: clone build build-addon
 

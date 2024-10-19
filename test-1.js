@@ -16,4 +16,5 @@ console.log('Signature:', signature.toString('hex'));
 
 // Verify the signature
 const isValid = cc.verify(signature, message, publicKey);
-console.log(isValid === 1 ? 'Signature is valid!' : 'Signature is invalid.');
+console.log({isValid})
+console.log(isValid === true ? 'Signature is valid!' : 'Signature is invalid.');
