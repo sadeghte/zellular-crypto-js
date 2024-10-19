@@ -1,23 +1,23 @@
-const {
-	SEED_SIZE,
-	SIG_SIZE,
-	UINT32_SIZE,
-	PUB_KEY_SIZE,
-	PRIV_KEY_SIZE,
-	GpuElems,
-	cudaCrypt,
-} = require("./wrapper");
+const addon = require('../build/Release/addon');
+
+const SHA512_SIZE = 64;
+const SIG_SIZE = 64;
+const PUB_KEY_SIZE = 32;
+const PRIV_KEY_SIZE = 64;
+const SCALAR_SIZE = 32;
+const SEED_SIZE = 32;
+const UINT32_SIZE = 4;
 
 const PACKET_SIZE = 512
 const STREAMER_META_SIZE = 40
 const STREAMER_PACKET_SIZE = PACKET_SIZE + STREAMER_META_SIZE
 
 function init() {
-	return cudaCrypt.ed25519_init();
+	return addon.ed25519_init();
 }
 
 function setVerbose(verbose) {
-	cudaCrypt.ed25519_set_verbose(verbose);
+	addon.ed25519_set_verbose(verbose);
 }
 
 function createKeyPair() {
@@ -25,23 +25,23 @@ function createKeyPair() {
 	const publicKey = Buffer.alloc(PUB_KEY_SIZE);   // ed25519 public key is 32 bytes
 	const privateKey = Buffer.alloc(PRIV_KEY_SIZE);  // ed25519 private key is 64 bytes
 
-	let success = cudaCrypt.ed25519_create_seed(seed);
+	let success = addon.ed25519_create_seed(seed);
 	if(success != 0)
 		throw `unable to create seed`;
 
-	cudaCrypt.ed25519_create_keypair(publicKey, privateKey, seed);
+	addon.ed25519_create_keypair(publicKey, privateKey, seed);
 
 	return {publicKey, privateKey}
 }
 
 function sign(message, publicKey, privateKey) {
 	const signature = Buffer.alloc(64);
-	cudaCrypt.ed25519_sign(signature, message, message.length, publicKey, privateKey);
+	addon.ed25519_sign(signature, message, message.length, publicKey, privateKey);
 	return signature;
 }
 
 function verify(signature, message, publicKey) {
-	return cudaCrypt.ed25519_verify(signature, message, message.length, publicKey);
+	return addon.ed25519_verify(signature, message, message.length, publicKey);
 }
 
 function signMany(dataBuffer, messageLens) {
@@ -66,15 +66,17 @@ function signMany(dataBuffer, messageLens) {
     const privateKeyOffsetsBuffer = Buffer.from(new Uint32Array(privateKeyOffsets).buffer);
     const messageStartOffsetsBuffer = Buffer.from(new Uint32Array(messageStartOffsets).buffer);
 
+	// console.log({count, dataBuffer: dataBuffer.toString('hex')})
+
     // Create an instance of GpuElemsPtr
-    const gpuElem = new GpuElems({
+    const gpuElems = {
         num: count,          // Number of elements (3 in this case)
         elems: dataBuffer, // Pass the messages buffer
-    });
+    };
 
 	const signaturesBuffer = Buffer.alloc(count * SIG_SIZE)
-    cudaCrypt.ed25519_sign_many(
-		gpuElem.ref(),                 // GpuElemsPtr (messages)
+    addon.ed25519_sign_many(
+		[gpuElems],                    // GpuElemsPtr (messages)
         1,                         // num_elems
         STREAMER_PACKET_SIZE,      // message_size
         count,                     // total_packets
@@ -113,14 +115,15 @@ function verifyMany(dataBuffer, messageLens) {
     const messageStartOffsetsBuffer = Buffer.from(new Uint32Array(messageStartOffsets).buffer);
 
     // Create an instance of GpuElemsPtr
-    const gpuElem = new GpuElems({
+    const gpuElems = {
         num: count,          // Number of elements (3 in this case)
         elems: dataBuffer, // Pass the messages buffer
-    });
+    };
 
 	const outBuffer = Buffer.alloc(count)
-    cudaCrypt.ed25519_verify_many(
-		gpuElem.ref(),                 // GpuElemsPtr (messages)
+	const t0 = Date.now();
+    addon.ed25519_verify_many(
+		[gpuElems],                 // GpuElemsPtr (messages)
         1,                         // num_elems
         STREAMER_PACKET_SIZE,      // message_size
         count,                     // total_packets
@@ -132,6 +135,8 @@ function verifyMany(dataBuffer, messageLens) {
         outBuffer,          // output signatures buffer
         1                          // use_non_default_stream (set to 0 for now)
     );
+	const dt = (Date.now() - t0)/1000;
+	// console.log(`verify gpu time: ${dt}, verifies/sec: ${count/dt}`)
 
     return outBuffer
 }
@@ -148,5 +153,4 @@ module.exports = {
 	verify,
 	signMany,
 	verifyMany,
-	cudaCrypt,
 }

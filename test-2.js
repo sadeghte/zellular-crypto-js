@@ -10,6 +10,20 @@ function format(num, n) {
 	return `${num.toFixed(n)}`
 }
 
+function isPrime(num) {
+    if (num <= 1) return false; // Numbers less than or equal to 1 are not prime
+    if (num <= 3) return true;  // 2 and 3 are prime numbers
+
+    // Check for even numbers greater than 2
+    if (num % 2 === 0) return false;
+
+    // Check for odd factors from 3 to the square root of num
+    for (let i = 3; i * i <= num; i += 2) {
+        if (num % i === 0) return false;
+    }
+    return true;
+}
+
 async function main() {
 	const argv = process.argv.slice(2)
 
@@ -18,11 +32,11 @@ async function main() {
 	process.env.VERBOSE = "1";
 
     const count = parseInt(argv[0]);
-    if (count <= 0)
-        throw `count should be > 0! ${count}`
+    if (isNaN(count) || count <= 0)
+        throw `signature count should be > 0! ${count}`
 
 	// Create messages, privateKeys, publicKeys
-	console.log("preparing data...");
+	console.log(`preparing ${count} data...`);
 	const rawData = Array.from({length: count}, () => ({
 		message: Buffer.from(new TextEncoder().encode("abcd1234")),
 		...cc.createKeyPair(),
@@ -45,7 +59,24 @@ async function main() {
 	const signatures = cc.signMany(signingDataBuffer, messageLens);
 	let signT1 = getTime()
 
+	// checking signatures
+	for(let i=0; i<count; i++) {
+		const tSign = cc.sign(rawData[i].message, rawData[i].publicKey, rawData[i].privateKey);
+		const verified = cc.verify(tSign, rawData[i].message, rawData[i].publicKey);
+		if(!verified)
+			throw `Invalid signature (verification failed)`
+		if(!signatures.slice(i*cc.SIG_SIZE, (i+1)*cc.SIG_SIZE).equals(tSign))
+			throw `Invalid signature (wrong value)`
+	}
 	console.log(`\n  sign: time: ${format(signT1-signT0, 2)},     sign/sec: ${format(count/(signT1-signT0), 2)}`)
+
+	// corrupt some signatures to check false positive verification.
+	for(let i=0; i<count; i++) {
+		if(isPrime(i)) {
+			const t = signatures[i*cc.SIG_SIZE];
+			signatures[i*cc.SIG_SIZE] = t === 0 ? 1 : 0
+		}
+	}
 
 	// Pack data to pass to the GPU to verify signatures
 	const verifingDataBuffer = Buffer.alloc(count * gpuPacketSize);
@@ -60,6 +91,13 @@ async function main() {
 	let verifT0 = getTime()
 	const verified = cc.verifyMany(verifingDataBuffer, messageLens);
 	let verifT1 = getTime()
+
+	// checking verify responses
+	for(let i=0; i<count; i++) {
+		const expected = !isPrime(i);
+		if(verified[i] != expected)
+			throw `verification failed.`
+	}
 	console.log(`verify: time: ${format(verifT1-verifT0, 2)}, verifies/sec: ${format(count/(verifT1-verifT0), 2)}`)
 }
 
